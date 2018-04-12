@@ -5,6 +5,7 @@ import sys
 import pandas
 import numpy as np
 import copy
+import time
 
 # global that will be the dataset to use
 data_set = None
@@ -12,6 +13,63 @@ data_set = None
 feature_set = None
 # global that will be the class set of the data
 class_set = None
+
+
+#
+# This function will take in scores and perform the sigmoid function and return it
+#
+def sigmoid(scores):
+	# Preform sigmoid
+	return 1 / (1 + np.exp(-scores))
+
+
+#
+# This is the function that will return the log likelihood of the target
+#
+def log_likelihood(features, target, weights):
+	# Get the dot product of all the scores
+	scores = np.dot(features, weights)
+	# Preform the log likelihood function
+	# print scores
+	# for i in range(len(scores)):
+	# 	if scores[i] > 709:
+	# 		scores[i] = 0
+	ll = np.sum( target*scores - np.log(1 + np.exp(scores)) )
+	# Return log likelihood
+	return ll
+
+
+#
+# This is the logisitc regression algorithm
+#
+def logistic_regression(features, target, num_steps, learning_rate, add_intercept = False):
+	# This is an option if you wish to add the intercept
+	if add_intercept:
+		intercept = np.ones((features.shape[0], 1))
+		features = np.hstack((intercept, features))
+		
+	# Get a list of weights and set them all to 0
+	weights = np.zeros(features.shape[1])
+	# For each step in the number of steps you wish to take
+	for step in xrange(num_steps):
+		# Get the scores by getting the dot product of the scores and the weights
+		scores = np.dot(features, weights)
+		# Get the prediction of the scores
+		predictions = sigmoid(scores)
+		print predictions
+		time.sleep(1)
+		# Update weights with gradient
+		output_error_signal = target - predictions
+
+		gradient = np.dot(features.T, output_error_signal)
+		weights += learning_rate * gradient
+		
+		# Print log-likelihood every so often
+		if step % 10000 == 0:
+			print log_likelihood(features, target, weights)
+		
+	return weights
+
 
 #
 # This function will get the mean of the array passed in
@@ -35,11 +93,16 @@ def stdev(arr):
 def summarize(data):
 	# the "zip" function will give us an iterable for each row of the data so we can get the attributes
 	#	for evey instance of data
+	
+	summaries = []
+	count = 0
+	for ele in data[0][:-1]:
+		temp_arr = []
+		for row in data:
+			temp_arr.append(row[count])
+		summaries.append((mean(temp_arr), stdev(temp_arr)))
+		count += 1
 
-	summaries = [(mean(attribute), stdev(attribute)) for attribute in zip(*removed_class_col)]
-
-	# Remove the summaries for the last attribute which is the "answer"
-	del summaries[-1]
 	# Return the summaries
 	return summaries
 
@@ -70,12 +133,13 @@ def separate_by_class(data):
 def summarize_by_class(data):
 	# Separate all of the classes
 	separated = separate_by_class(data)
+
 	# Set an empty set
 	summaries = {}
 	# For each class
-	for classValue, instances in separated.iteritems():
+	for instances in separated:
 		# Get the summary of that class
-		summaries[classValue] = summarize(instances)
+		summaries[instances] = summarize(separated[instances])
 	return summaries
 
 
@@ -155,7 +219,7 @@ def get_accuracy(testSet, predictions):
 	# For each entry in test set
 	for x in range(len(testSet)):
 		# If you got the class correct
-		if testSet[x][0] == predictions[x]:
+		if testSet[x][-1] == predictions[x]:
 			# Add 1 to the correct variable
 			correct += 1
 	# Return the accuracy by dividing the number of correct guesses by the total
@@ -175,8 +239,6 @@ def naive_bayes_algo(test_set, training_set):
 	accuracy = get_accuracy(test_set, predictions)
 	# print('Naive Bayes Accuracy: {0}%').format(accuracy)
 	return accuracy
-
-
 
 
 def read_csv(filepath):
@@ -221,15 +283,60 @@ if __name__ == "__main__":
 	# Read in the file passed in by the command line when script started
 	info = read_csv(sys.argv[1])
 
-	removed_class_col = []
-	for row in info[1]:
+	data = cross_fold_sets(info[1], 1, 5)
+	train_data = data[0]
+	test_data = data[1]
+
+
+	train_feats = []
+	train_class = []
+	for row in train_data:
 		c = row[-1]
 		row = [float(i) for i in row[:-1]]
-		row.append(c)
-		removed_class_col.append(row)
+		# row.append(c)
+		train_class.append(c)
+		train_feats.append(row)
 
-	print removed_class_col
-	for i in range(5):
-		data = cross_fold_sets(removed_class_col, i, 5)
+	test_feats = []
+	test_class = []
+	for row in test_data:
+		c = row[-1]
+		row = [float(i) for i in row[:-1]]
+		# row.append(c)
+		test_class.append(c)
+		test_feats.append(row)
 
-		print naive_bayes_algo(data[1], data[0])
+
+
+	feats = np.array(train_feats, dtype=np.float64)
+	clas = np.array(train_class,  dtype=np.float64)
+
+	test_f = np.array(test_feats,  dtype=np.float64)
+	test_c = np.array(test_class,  dtype=np.float64)
+
+	np.random.seed(12)
+	num_observations = 5000
+
+	# x1 = np.random.multivariate_normal([0, 0], [[1, .75],[.75, 1]], num_observations)
+	# x2 = np.random.multivariate_normal([1, 4], [[1, .75],[.75, 1]], num_observations)
+
+	# simulated_separableish_features = np.vstack((x1, x2)).astype(np.float32)
+	# simulated_labels = np.hstack((np.zeros(num_observations), np.ones(num_observations)))
+
+	weights = logistic_regression(feats, clas, num_steps = 30000, learning_rate = 5e-5, add_intercept=True)
+	# print feats
+	data_with_intercept = np.hstack((np.ones((test_f.shape[0], 1)), test_f))
+	# print data_with_intercept
+
+	final_scores = np.dot(data_with_intercept, weights)
+	print final_scores
+	preds = np.round(sigmoid(final_scores))
+	print preds
+
+	# print preds
+	print 'Accuracy from scratch: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
+	# print removed_class_col
+	# for i in range(5):
+	# 	data = cross_fold_sets(removed_class_col, i, 5)
+
+	# 	print naive_bayes_algo(data[1], data[0])
