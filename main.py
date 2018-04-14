@@ -45,7 +45,7 @@ def log_likelihood(features, target, weights):
 #
 # This is the logisitc regression algorithm
 #
-def logistic_regression(features, target, num_steps, learning_rate, add_intercept = False):
+def logistic_regression(features, target, num_steps, learning_rate, multiclass, add_intercept = False):
 	# This is an option if you wish to add the intercept
 	if add_intercept:
 		intercept = np.ones((features.shape[0], 1))
@@ -58,8 +58,10 @@ def logistic_regression(features, target, num_steps, learning_rate, add_intercep
 		# Get the scores by getting the dot product of the scores and the weights
 		scores = np.dot(features, weights)
 		# Get the prediction of the scores
-		predictions = sigmoid(scores)
-		# predictions = softmax(scores)
+		if multiclass:
+			predictions = softmax(scores)
+		else:
+			predictions = sigmoid(scores)
 
 		# Update weights with gradient
 		output_error_signal = target - predictions
@@ -243,7 +245,7 @@ def get_accuracy(testSet, predictions):
 	return (correct/float(len(testSet))) * 100.0
 
 
-print_once = 0
+# print_once = 0
 #
 # This function will run the naive bayes algorithm and return the accuracy
 #
@@ -251,13 +253,13 @@ def naive_bayes_algo(test_set, training_set):
 	# Summarize the attributes
 	summaries = summarize_by_class(training_set)
 	# The assignment says to only print one set of weights out
-	global print_once
-	# If you havent printed yet
-	if print_once == 0:
-		# Print the summaries
-		print summaries
-		# Set the print_once global to 1
-		print_once = 1
+	# global print_once
+	# # If you havent printed yet
+	# if print_once == 0:
+	# 	# Print the summaries
+	# 	print summaries
+	# 	# Set the print_once global to 1
+	# 	print_once = 1
 	# Get the predictions of the test set
 	predictions = get_predictions(summaries, test_set)
 	#Get the accuracy
@@ -303,92 +305,84 @@ def cross_fold_sets(data, k, K):
 	# Return the sets
 	return (training_set, validation_set)
 
-def warn(*args, **kwargs):
-    pass
-import warnings
-warnings.warn = warn
+#
+# This function will return the data separated by featuers and classes and folds
+#
+def separate_data(data):
+	# Get a reference to the test and training data
+	train_data = data[0]
+	test_data = data[1]
 
+	# Create Empty lists to populate
+	train_feats = []
+	train_class = []
+	# For each row in the training data
+	for row in train_data:
+		# Get a reference to the class label of the row
+		c = row[-1]
+		# turn all feature numbers into floats
+		row = [float(i) for i in row[:-1]]
+		# Add the the class to the train class list
+		train_class.append(c)
+		# Add the features to the train feature list
+		train_feats.append(row)
+
+	# Create empty lists to populate
+	test_feats = []
+	test_class = []
+	# For each row in the test data
+	for row in test_data:
+		# Get a reference to the class label
+		c = row[-1]
+		# Turn all features into floats
+		row = [float(i) for i in row[:-1]]
+		# Add the class label to the test class list
+		test_class.append(c)
+		# Add the features to the test features list
+		test_feats.append(row)
+	# Turn all arrays into numpy arrays and make the floats 64 bit
+	feats = np.array(train_feats, dtype=np.float64)
+	clas = np.array(train_class,  dtype=np.float64)
+	test_f = np.array(test_feats,  dtype=np.float64)
+	test_c = np.array(test_class,  dtype=np.float64)
+	# Return all of the lists created
+	return feats, clas, test_f, test_c
+
+#
+# This is the main thread that will start the program
+#
 if __name__ == "__main__":
 	# Read in the file passed in by the command line when script started
 	info = read_csv(sys.argv[1])
+	# Set a variable to keep track of the accuracy
+	folds_acc = 0
+	# Do five fold crossvalidataon
+	for i in range(5):
+		# Split the data in corresponding folds
+		data = cross_fold_sets(info[1], i, 5)
+		# Separate all of the data to use
+		feats, clas, test_f, test_c = separate_data(data)
+		# Use logistic regression to get the weights of all of the trainging data
+		weights = logistic_regression(feats, clas, num_steps = 3000, learning_rate = 5e-5, multiclass=False, add_intercept=True)
+		# Get the intercept by taking on an array of 1s
+		data_with_intercept = np.hstack((np.ones((test_f.shape[0], 1)), test_f))
+		# Get the final score of the data using the weights
+		final_scores = np.dot(data_with_intercept, weights)
+		# Get all of the predictions using the sigmoid function
+		# preds = np.round(sigmoid(final_scores))
+		preds = np.round(softmax(final_scores))
 
-	from sklearn import linear_model
-	from sklearn import metrics
-	from sklearn.cross_validation import train_test_split
+		folds_acc += (preds == test_c).sum().astype(float) / len(preds)
+		# print 'Logistic regression Accuracy :: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
 
-	# glass_data_headers = ["Id", "RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe", "glass-type"]
-	# glass_data = pd.read_csv("glass.csv", names=glass_data_headers)
-
-	# glass_data_headers = ["sepal length", "sepal width", "petal length", "petal width","class"]
-	# glass_data = pd.read_csv("iris.csv", names=glass_data_headers)
-
-	glass_data_headers = ["date", "plant-stand", "precip", "temp", "hail", "crop-hist", "area-damaged", \
-	 "severity", "seed-tmt", "germination", "plant-growth", "leaves", "leafspots-halo", "leafspots-marg", "leafspot-size", \
-	 "leaf-shread", "leaf-malf", "leaf-mild", "stem", "lodging", "stem-cankers", "canker-lesion", \
-	 "fruiting-bodies", "external decay", "mycelium", "int-discolor", "sclerotia", "fruit-pods", "fruit spots", \
-	 "seed", "mold-growth", "seed-discolor", "seed-size", "shriveling", "roots", "class"]
-	glass_data = pd.read_csv("soybean.csv", names=glass_data_headers)	
-
-	train_x, test_x, train_y, test_y = train_test_split(glass_data[glass_data_headers[:-1]], glass_data[glass_data_headers[-1]], train_size=0.7)
-	# Train multi-class logistic regression model
-	lr = linear_model.LogisticRegression()
-	lr.fit(train_x, train_y)
-	print lr.coef_[0]
-
-	print "Logistic regression Accuracy :: ", metrics.accuracy_score(train_y, lr.predict(train_x))
-
-	time.sleep(2)
-	# data = cross_fold_sets(info[1], 1, 5)
-	# train_data = data[0]
-	# test_data = data[1]
-
-
-	# train_feats = []
-	# train_class = []
-	# for row in train_data:
-	# 	c = row[-1]
-	# 	row = [float(i) for i in row[:-1]]
-	# 	# row.append(c)
-	# 	train_class.append(c)
-	# 	train_feats.append(row)
-
-
-	# test_feats = []
-	# test_class = []
-	# for row in test_data:
-	# 	c = row[-1]
-	# 	row = [float(i) for i in row[:-1]]
-	# 	# row.append(c)
-	# 	test_class.append(c)
-	# 	test_feats.append(row)
-
-
-
-	# feats = np.array(train_feats, dtype=np.float64)
-	# clas = np.array(train_class,  dtype=np.float64)
-
-	# test_f = np.array(test_feats,  dtype=np.float64)
-	# test_c = np.array(test_class,  dtype=np.float64)
-
-
-	# weights = logistic_regression(feats, clas, num_steps = 3000, learning_rate = 5e-5, add_intercept=True)
-	# print weights
-	# # print feats
-	# data_with_intercept = np.hstack((np.ones((test_f.shape[0], 1)), test_f))
-	# # print data_with_intercept
-
-	# final_scores = np.dot(data_with_intercept, weights)
-	# # print final_scores
-	# preds = np.round(sigmoid(final_scores))
-	# print preds
+	print 'Logistic regression Accuracy :: ' + str((folds_acc /5) * 100)
 	removed_class_col = []
 	for row in info[1]:
 		c = row[-1]
 		row = [float(i) for i in row[:-1]]
 		row.append(c)
 		removed_class_col.append(row)
-	# print preds
-	# print 'Accuracy from scratch: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
+
 	folds_acc = 0
 	for i in range(5):
 		data = cross_fold_sets(removed_class_col, i, 5)
