@@ -2,7 +2,7 @@ import csv
 import math
 import random
 import sys
-import pandas
+import pandas as pd
 import numpy as np
 import copy
 import time
@@ -13,6 +13,13 @@ data_set = None
 feature_set = None
 # global that will be the class set of the data
 class_set = None
+
+#
+# This function will calculate the softmax for the array passed in
+#
+def softmax(inputs):
+	# Preform the softmax function and return the values
+	return np.exp(inputs) / float(sum(np.exp(inputs)))
 
 
 #
@@ -30,10 +37,6 @@ def log_likelihood(features, target, weights):
 	# Get the dot product of all the scores
 	scores = np.dot(features, weights)
 	# Preform the log likelihood function
-	# print scores
-	# for i in range(len(scores)):
-	# 	if scores[i] > 709:
-	# 		scores[i] = 0
 	ll = np.sum( target*scores - np.log(1 + np.exp(scores)) )
 	# Return log likelihood
 	return ll
@@ -56,8 +59,8 @@ def logistic_regression(features, target, num_steps, learning_rate, add_intercep
 		scores = np.dot(features, weights)
 		# Get the prediction of the scores
 		predictions = sigmoid(scores)
-		print predictions
-		time.sleep(1)
+		# predictions = softmax(scores)
+
 		# Update weights with gradient
 		output_error_signal = target - predictions
 
@@ -65,8 +68,8 @@ def logistic_regression(features, target, num_steps, learning_rate, add_intercep
 		weights += learning_rate * gradient
 		
 		# Print log-likelihood every so often
-		if step % 10000 == 0:
-			print log_likelihood(features, target, weights)
+		# if step % 10000 == 0:
+		# 	print log_likelihood(features, target, weights)
 		
 	return weights
 
@@ -84,23 +87,35 @@ def mean(arr):
 #
 def stdev(arr):
 	# Get the standard deviation of the entire array that was passed in
+	# Check for zero
+	len_of_arr = float(len(arr)-1)
+	if len_of_arr == 0:
+		return 0
 	# Start by getting the variance
-	variance = sum([pow(x-mean(arr),2) for x in arr])/float(len(arr)-1)
+	variance = sum([pow(x-mean(arr),2) for x in arr])/(float(len(arr)))
 	# Then take the square root of the variance
 	return math.sqrt(variance)
 
 
+#
+# This function will get all of the summaries of the mean and stddev of the data
+#
 def summarize(data):
-	# the "zip" function will give us an iterable for each row of the data so we can get the attributes
-	#	for evey instance of data
-	
+	# Create an empty list to house all of the summaries
 	summaries = []
+	# Create an iterable
 	count = 0
+	# For each feature
 	for ele in data[0][:-1]:
+		# Create a temp list
 		temp_arr = []
+		# For every row in the data
 		for row in data:
+			# Append the row to the temp array
 			temp_arr.append(row[count])
+		# Add the mean and sdtdev to the summaries array
 		summaries.append((mean(temp_arr), stdev(temp_arr)))
+		# Increment the counter
 		count += 1
 
 	# Return the summaries
@@ -185,6 +200,7 @@ def calculate_class_probabilities(summaries, inputVector):
 def predict(summaries, inputVector):
 	# Get the probability of all the classes
 	probabilities = calculate_class_probabilities(summaries, inputVector)
+	# Set running variables for best you have seen so far
 	bestLabel, bestProb = None, -1
 	# For each of the probabilies get the the best
 	for classValue, probability in probabilities.iteritems():
@@ -227,17 +243,26 @@ def get_accuracy(testSet, predictions):
 	return (correct/float(len(testSet))) * 100.0
 
 
+print_once = 0
 #
 # This function will run the naive bayes algorithm and return the accuracy
 #
 def naive_bayes_algo(test_set, training_set):
 	# Summarize the attributes
 	summaries = summarize_by_class(training_set)
+	# The assignment says to only print one set of weights out
+	global print_once
+	# If you havent printed yet
+	if print_once == 0:
+		# Print the summaries
+		print summaries
+		# Set the print_once global to 1
+		print_once = 1
 	# Get the predictions of the test set
 	predictions = get_predictions(summaries, test_set)
 	#Get the accuracy
 	accuracy = get_accuracy(test_set, predictions)
-	# print('Naive Bayes Accuracy: {0}%').format(accuracy)
+	# Return accuracy
 	return accuracy
 
 
@@ -278,65 +303,95 @@ def cross_fold_sets(data, k, K):
 	# Return the sets
 	return (training_set, validation_set)
 
+def warn(*args, **kwargs):
+    pass
+import warnings
+warnings.warn = warn
 
 if __name__ == "__main__":
 	# Read in the file passed in by the command line when script started
 	info = read_csv(sys.argv[1])
 
-	data = cross_fold_sets(info[1], 1, 5)
-	train_data = data[0]
-	test_data = data[1]
+	from sklearn import linear_model
+	from sklearn import metrics
+	from sklearn.cross_validation import train_test_split
+
+	# glass_data_headers = ["Id", "RI", "Na", "Mg", "Al", "Si", "K", "Ca", "Ba", "Fe", "glass-type"]
+	# glass_data = pd.read_csv("glass.csv", names=glass_data_headers)
+
+	# glass_data_headers = ["sepal length", "sepal width", "petal length", "petal width","class"]
+	# glass_data = pd.read_csv("iris.csv", names=glass_data_headers)
+
+	glass_data_headers = ["date", "plant-stand", "precip", "temp", "hail", "crop-hist", "area-damaged", \
+	 "severity", "seed-tmt", "germination", "plant-growth", "leaves", "leafspots-halo", "leafspots-marg", "leafspot-size", \
+	 "leaf-shread", "leaf-malf", "leaf-mild", "stem", "lodging", "stem-cankers", "canker-lesion", \
+	 "fruiting-bodies", "external decay", "mycelium", "int-discolor", "sclerotia", "fruit-pods", "fruit spots", \
+	 "seed", "mold-growth", "seed-discolor", "seed-size", "shriveling", "roots", "class"]
+	glass_data = pd.read_csv("soybean.csv", names=glass_data_headers)	
+
+	train_x, test_x, train_y, test_y = train_test_split(glass_data[glass_data_headers[:-1]], glass_data[glass_data_headers[-1]], train_size=0.7)
+	# Train multi-class logistic regression model
+	lr = linear_model.LogisticRegression()
+	lr.fit(train_x, train_y)
+	print lr.coef_[0]
+
+	print "Logistic regression Accuracy :: ", metrics.accuracy_score(train_y, lr.predict(train_x))
+
+	time.sleep(2)
+	# data = cross_fold_sets(info[1], 1, 5)
+	# train_data = data[0]
+	# test_data = data[1]
 
 
-	train_feats = []
-	train_class = []
-	for row in train_data:
-		c = row[-1]
-		row = [float(i) for i in row[:-1]]
-		# row.append(c)
-		train_class.append(c)
-		train_feats.append(row)
-
-	test_feats = []
-	test_class = []
-	for row in test_data:
-		c = row[-1]
-		row = [float(i) for i in row[:-1]]
-		# row.append(c)
-		test_class.append(c)
-		test_feats.append(row)
+	# train_feats = []
+	# train_class = []
+	# for row in train_data:
+	# 	c = row[-1]
+	# 	row = [float(i) for i in row[:-1]]
+	# 	# row.append(c)
+	# 	train_class.append(c)
+	# 	train_feats.append(row)
 
 
+	# test_feats = []
+	# test_class = []
+	# for row in test_data:
+	# 	c = row[-1]
+	# 	row = [float(i) for i in row[:-1]]
+	# 	# row.append(c)
+	# 	test_class.append(c)
+	# 	test_feats.append(row)
 
-	feats = np.array(train_feats, dtype=np.float64)
-	clas = np.array(train_class,  dtype=np.float64)
 
-	test_f = np.array(test_feats,  dtype=np.float64)
-	test_c = np.array(test_class,  dtype=np.float64)
 
-	np.random.seed(12)
-	num_observations = 5000
+	# feats = np.array(train_feats, dtype=np.float64)
+	# clas = np.array(train_class,  dtype=np.float64)
 
-	# x1 = np.random.multivariate_normal([0, 0], [[1, .75],[.75, 1]], num_observations)
-	# x2 = np.random.multivariate_normal([1, 4], [[1, .75],[.75, 1]], num_observations)
+	# test_f = np.array(test_feats,  dtype=np.float64)
+	# test_c = np.array(test_class,  dtype=np.float64)
 
-	# simulated_separableish_features = np.vstack((x1, x2)).astype(np.float32)
-	# simulated_labels = np.hstack((np.zeros(num_observations), np.ones(num_observations)))
 
-	weights = logistic_regression(feats, clas, num_steps = 30000, learning_rate = 5e-5, add_intercept=True)
-	# print feats
-	data_with_intercept = np.hstack((np.ones((test_f.shape[0], 1)), test_f))
-	# print data_with_intercept
+	# weights = logistic_regression(feats, clas, num_steps = 3000, learning_rate = 5e-5, add_intercept=True)
+	# print weights
+	# # print feats
+	# data_with_intercept = np.hstack((np.ones((test_f.shape[0], 1)), test_f))
+	# # print data_with_intercept
 
-	final_scores = np.dot(data_with_intercept, weights)
-	print final_scores
-	preds = np.round(sigmoid(final_scores))
-	print preds
-
+	# final_scores = np.dot(data_with_intercept, weights)
+	# # print final_scores
+	# preds = np.round(sigmoid(final_scores))
 	# print preds
-	print 'Accuracy from scratch: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
-	# print removed_class_col
-	# for i in range(5):
-	# 	data = cross_fold_sets(removed_class_col, i, 5)
+	removed_class_col = []
+	for row in info[1]:
+		c = row[-1]
+		row = [float(i) for i in row[:-1]]
+		row.append(c)
+		removed_class_col.append(row)
+	# print preds
+	# print 'Accuracy from scratch: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
+	folds_acc = 0
+	for i in range(5):
+		data = cross_fold_sets(removed_class_col, i, 5)
 
-	# 	print naive_bayes_algo(data[1], data[0])
+		folds_acc += naive_bayes_algo(data[1], data[0])
+	print "Naive Bayes Accuracy :: " + str(folds_acc/5)
