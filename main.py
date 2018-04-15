@@ -354,6 +354,7 @@ def separate_data(data):
 if __name__ == "__main__":
 	# Read in the file passed in by the command line when script started
 	info = read_csv(sys.argv[1])
+	multiclass = sys.argv[2]
 	# Set a variable to keep track of the accuracy
 	folds_acc = 0
 	# Do five fold crossvalidataon
@@ -374,18 +375,27 @@ if __name__ == "__main__":
 
 		folds_acc += (preds == test_c).sum().astype(float) / len(preds)
 		# print 'Logistic regression Accuracy :: {0}'.format((preds == test_c).sum().astype(float) / len(preds))
-
+	# Pring the accuracy
 	print 'Logistic regression Accuracy :: ' + str((folds_acc /5) * 100)
+	# Make a list to house the feature set
 	removed_class_col = []
+	# For each row in the data set
 	for row in info[1]:
+		# Get a reference to the class
 		c = row[-1]
+		# Make sure all features become floats
 		row = [float(i) for i in row[:-1]]
+		# Append the class to the end of the feature set
 		row.append(c)
+		# Add the row back to the list
 		removed_class_col.append(row)
-
+	# Set a running total for accuracy
 	folds_acc = 0
+	# For 5 folds
 	for i in range(5):
+		# Get the Data corresponding to that fold
 		data = cross_fold_sets(removed_class_col, i, 5)
-
+		# Add the accuracy to the running total
 		folds_acc += naive_bayes_algo(data[1], data[0])
+	# Print the accuracy 
 	print "Naive Bayes Accuracy :: " + str(folds_acc/5)
